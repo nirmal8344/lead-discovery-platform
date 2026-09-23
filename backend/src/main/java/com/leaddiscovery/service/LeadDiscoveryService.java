@@ -51,7 +51,7 @@ public class LeadDiscoveryService {
             }
 
             try {
-                log.info("[DISCOVERY_PROVIDER] Querying provider '{}' for '{} in {}' (radius={} km)",
+                log.info("[DIAGNOSTIC] Provider '{}' started for '{} in {}' (radius={} km)",
                         provider.getProviderName(), keyword, location, radiusKm != null ? radiusKm : "N/A");
                 List<DiscoveredBusinessDto> results = provider.discover(location, keyword, maxResults, radiusKm);
                 int providerRawCount = results != null ? results.size() : 0;
@@ -92,11 +92,11 @@ public class LeadDiscoveryService {
                     }
                 }
 
-                log.info("[DISCOVERY_PROVIDER_RESULT] Provider '{}': rawCount={}, acceptedCount={}",
-                        provider.getProviderName(), providerRawCount, providerAcceptedCount);
+                log.info("[DIAGNOSTIC] Provider '{}' succeeded and found {} valid candidates.",
+                        provider.getProviderName(), providerAcceptedCount);
 
             } catch (Exception e) {
-                log.error("[DISCOVERY_PROVIDER_ERROR] Error running discovery provider '{}': {}", provider.getProviderName(), e.getMessage());
+                log.error("[DIAGNOSTIC] Provider '{}' failed: {}", provider.getProviderName(), e.getMessage());
                 warnings.add("Provider '" + provider.getProviderName() + "' encountered an error: " + e.getMessage());
             }
 
@@ -109,7 +109,7 @@ public class LeadDiscoveryService {
             warnings.add("No candidate businesses found matching keyword '" + keyword + "' and location '" + location + "'.");
         }
 
-        log.info("[DISCOVERY_COMPLETE] Completed lead discovery: {} total unique businesses discovered", discoveredBusinesses.size());
+        log.info("[DIAGNOSTIC] Completed lead discovery: {} final unique candidate count", discoveredBusinesses.size());
 
         return new LeadDiscoveryResponse(
                 location,

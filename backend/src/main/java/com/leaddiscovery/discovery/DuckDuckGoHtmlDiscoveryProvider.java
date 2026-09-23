@@ -24,7 +24,7 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
     private static final String LITE_ENDPOINT = "https://lite.duckduckgo.com/lite/";
     private static final String USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-    private static final int TIMEOUT_MILLIS = 10000;
+    private static final int TIMEOUT_MILLIS = 5000;
 
     @Override
     public String getProviderName() {
@@ -51,24 +51,29 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
             }
 
             // Strategy 1: POST to html.duckduckgo.com/html/
-            List<DiscoveredBusinessDto> results = executePostSearch(HTML_ENDPOINT, query, "https://html.duckduckgo.com/", maxResults - allResults.size());
-            if (results.isEmpty()) {
-                // Strategy 2: Fallback to POST lite.duckduckgo.com/lite/
-                results = executePostSearch(LITE_ENDPOINT, query, "https://lite.duckduckgo.com/", maxResults - allResults.size());
-            }
-            if (results.isEmpty()) {
-                // Strategy 3: Fallback to GET html.duckduckgo.com/html/?q=...
-                results = executeGetSearch(HTML_ENDPOINT + "?q=" + URLEncoder.encode(query, StandardCharsets.UTF_8), query, maxResults - allResults.size());
-            }
+            try {
+                List<DiscoveredBusinessDto> results = executePostSearch(HTML_ENDPOINT, query, "https://html.duckduckgo.com/", maxResults - allResults.size());
+                if (results.isEmpty()) {
+                    // Strategy 2: Fallback to POST lite.duckduckgo.com/lite/
+                    results = executePostSearch(LITE_ENDPOINT, query, "https://lite.duckduckgo.com/", maxResults - allResults.size());
+                }
+                if (results.isEmpty()) {
+                    // Strategy 3: Fallback to GET html.duckduckgo.com/html/?q=...
+                    results = executeGetSearch(HTML_ENDPOINT + "?q=" + URLEncoder.encode(query, StandardCharsets.UTF_8), query, maxResults - allResults.size());
+                }
 
-            for (DiscoveredBusinessDto item : results) {
-                String domain = UrlFilterUtils.extractDomain(item.getWebsiteUrl());
-                if (!domain.isBlank() && seenDomains.add(domain)) {
-                    allResults.add(item);
-                    if (allResults.size() >= maxResults) {
-                        break;
+                for (DiscoveredBusinessDto item : results) {
+                    String domain = UrlFilterUtils.extractDomain(item.getWebsiteUrl());
+                    if (!domain.isBlank() && seenDomains.add(domain)) {
+                        allResults.add(item);
+                        if (allResults.size() >= maxResults) {
+                            break;
+                        }
                     }
                 }
+            } catch (Exception e) {
+                log.warn("[DIAGNOSTIC] DuckDuckGo overall request failed or timed out for query '{}': {}. Skipping further DDG variants.", query, e.getMessage());
+                break;
             }
         }
 
@@ -113,6 +118,9 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
                     endpoint, statusCode, contentType != null ? contentType : "unknown", results.size());
 
             return results;
+        } catch (java.net.SocketTimeoutException e) {
+            log.warn("[DIAGNOSTIC] DuckDuckGo POST request timed out -> URL: {}, Query: '{}'", endpoint, query);
+            throw new RuntimeException("DuckDuckGo timeout", e);
         } catch (Exception e) {
             log.warn("[DIAGNOSTIC] DuckDuckGo POST request failed -> URL: {}, Query: '{}', Error: {}", endpoint, query, e.getMessage());
             return Collections.emptyList();
@@ -153,6 +161,9 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
                     searchUrl, statusCode, contentType != null ? contentType : "unknown", results.size());
 
             return results;
+        } catch (java.net.SocketTimeoutException e) {
+            log.warn("[DIAGNOSTIC] DuckDuckGo GET search timed out -> URL: {}, Query: '{}'", searchUrl, query);
+            throw new RuntimeException("DuckDuckGo timeout", e);
         } catch (Exception e) {
             log.warn("[DIAGNOSTIC] DuckDuckGo GET search failed -> URL: {}, Query: '{}', Error: {}", searchUrl, query, e.getMessage());
             return Collections.emptyList();
