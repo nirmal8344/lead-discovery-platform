@@ -1,0 +1,43 @@
+# Build artifacts
+target/
+*.class
+*.jar
+*.war
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Logs
+*.log
+logs/
+error.log
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Documentation
+README.md
+HELP.md
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Railway
+railway.toml

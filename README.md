@@ -189,15 +189,94 @@ CREATE DATABASE lead_discovery;
 
 ---
 
-## Production Deployment Notes
+## Production Deployment (Railway)
 
-1. **Database**: Use a managed PostgreSQL instance (AWS RDS, Supabase, Neon, etc.) with SSL enabled (`sslmode=require`).
-2. **Environment Variables**: Provide `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, and `JWT_SECRET` via secure environment variables or secret managers.
-3. **Frontend**: Build the static bundle (`npm run build`) and deploy to Cloudflare Pages, Vercel, Netlify, or Nginx. Point `VITE_API_URL` to your backend domain.
-4. **Backend Containerization**: The Spring Boot backend can be packaged into a lightweight Docker container using standard OpenJDK 17 base images.
-5. **CORS**: Set `CORS_ALLOWED_ORIGINS` to your production frontend domain (e.g., `https://leads.yourdomain.com`).
+The backend is containerized with Docker and optimized for [Railway](https://railway.app) deployment.
+
+### Prerequisites
+- [Railway](https://railway.app) account (free tier available)
+- GitHub repository connected to Railway
+
+### Architecture
+```
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│   Frontend       │     │   Backend        │     │   PostgreSQL     │
+│   (Vercel/       │────▶│   (Railway)      │────▶│   (Railway       │
+│    Netlify)       │     │   Spring Boot    │     │    Addon)        │
+│                  │     │   + Playwright   │     │                  │
+└──────────────────┘     └──────────────────┘     └──────────────────┘
+```
+
+### Deploy to Railway
+
+1. **Create a Railway project** and add a **PostgreSQL** database addon.
+
+2. **Add the backend service** → Connect your GitHub repo → Set root directory to `backend/`.
+
+3. **Set environment variables** in Railway dashboard:
+
+| Variable | Value | Required |
+|---|---|---|
+| `DB_URL` | `jdbc:postgresql://<PGHOST>:<PGPORT>/<PGDATABASE>` | ✅ |
+| `DB_USERNAME` | From Railway PostgreSQL addon | ✅ |
+| `DB_PASSWORD` | From Railway PostgreSQL addon | ✅ |
+| `JWT_SECRET` | Generate: `openssl rand -hex 32` | ✅ |
+| `JWT_EXPIRATION_MS` | `86400000` (24 hours) | ✅ |
+| `CORS_ALLOWED_ORIGINS` | `https://your-frontend-domain.vercel.app` | ✅ |
+| `SPRING_PROFILES_ACTIVE` | `production` | ✅ |
+| `PORT` | Auto-set by Railway | Auto |
+| `DB_POOL_MAX` | `10` (default) | Optional |
+| `DB_POOL_MIN` | `2` (default) | Optional |
+
+4. **Deploy** — Railway auto-builds using the `Dockerfile` and starts the service.
+
+5. **Verify** — Hit `https://your-backend.railway.app/api/health`:
+   ```json
+   {"status": "UP", "timestamp": "...", "service": "lead-discovery-backend"}
+   ```
+
+### Docker Image Details
+
+- **Build stage**: `maven:3.9-eclipse-temurin-17` — compiles the fat JAR
+- **Runtime stage**: `mcr.microsoft.com/playwright/java:v1.49.0-noble` — includes JDK 17 + Chromium browser + all system dependencies
+- **No Node.js/npm needed** — Playwright browsers are pre-installed in the official image
+- **Non-root user** — runs as `appuser` for security
+- **Health check** — built-in Docker HEALTHCHECK on `/api/health`
+
+### Local Docker Testing
+
+```bash
+cd backend
+
+# Build the image
+docker build -t lead-discovery-backend .
+
+# Run with local PostgreSQL
+docker run -p 8080:8080 \
+  -e PORT=8080 \
+  -e DB_URL=jdbc:postgresql://host.docker.internal:5432/lead_discovery \
+  -e DB_USERNAME=postgres \
+  -e DB_PASSWORD=your_password \
+  -e JWT_SECRET=your_jwt_secret_minimum_256_bits_hex \
+  -e CORS_ALLOWED_ORIGINS=http://localhost:5173 \
+  lead-discovery-backend
+
+# Verify
+curl http://localhost:8080/api/health
+```
+
+### Frontend Deployment
+
+Build the static bundle and deploy to Vercel, Netlify, or Cloudflare Pages:
+```bash
+cd frontend
+VITE_API_URL=https://your-backend.railway.app npm run build
+```
+
+Set `VITE_API_URL` to your Railway backend URL.
 
 ---
 
 ## License
 MIT License.
+
