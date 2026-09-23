@@ -66,7 +66,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <h1 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2 }}>
             {currentTabInfo.title}
           </h1>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <p className="navbar-subtitle" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {currentTabInfo.subtitle}
           </p>
         </div>
@@ -102,7 +102,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           icon={<Plus size={16} />}
           onClick={onOpenCreateTask}
         >
-          <span>Create Task</span>
+          <span className="navbar-create-text">Create Task</span>
         </Button>
       </div>
     </header>

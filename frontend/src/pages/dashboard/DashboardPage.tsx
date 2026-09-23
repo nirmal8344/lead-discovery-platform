@@ -77,6 +77,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
       {/* Main Section Hero */}
       <div
+        className="hero-banner"
         style={{
           background: 'var(--hero-bg)',
           borderRadius: '16px',
@@ -131,7 +132,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       </div>
 
       {/* 4 Stat Metric Cards */}
-      <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+      <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: '1rem' }}>
         <div className="stat-card">
           <div className="stat-header">
             <span className="stat-label">Total Leads</span>
@@ -186,7 +187,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       </div>
 
       {/* Two-Column Grid: Recent Tasks & Recent Discovered Leads */}
-      <div className="two-col-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) minmax(300px, 1fr)', gap: '1.25rem' }}>
+      <div className="two-col-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))', gap: '1.25rem' }}>
         {/* Recent Tasks */}
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>

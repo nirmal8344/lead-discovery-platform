@@ -199,7 +199,7 @@ export const DiscoverLeadsPage: React.FC<DiscoverLeadsPageProps> = ({
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+          <div className="form-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
             <Button
               type="button"
               variant="secondary"

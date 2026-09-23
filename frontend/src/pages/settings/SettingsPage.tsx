@@ -112,7 +112,7 @@ export const SettingsPage: React.FC = () => {
       <div className="card" style={{ padding: '1.5rem' }}>
         {sectionHeader(<Palette size={18} />, 'Appearance', 'Customize the interface theme for day or night use')}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', maxWidth: '440px' }}>
+        <div className="theme-selector" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', maxWidth: '440px' }}>
           <button
             type="button"
             onClick={() => setTheme('light')}
@@ -193,7 +193,7 @@ export const SettingsPage: React.FC = () => {
       <div className="card" style={{ padding: '1.5rem' }}>
         {sectionHeader(<User size={18} />, 'Account Information', 'Your active session profile')}
         {user ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(180px, 100%), 1fr))', gap: '1rem' }}>
             {[
               { label: 'Full Name', value: user.name },
               { label: 'Email Address', value: user.email },

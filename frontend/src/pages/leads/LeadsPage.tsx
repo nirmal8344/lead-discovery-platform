@@ -182,7 +182,7 @@ export const LeadsPage: React.FC<LeadsPageProps> = ({ initialTaskId: _initialTas
       {/* Filter and Search Bar */}
       <div className="card" style={{ padding: '1.25rem' }}>
         <form onSubmit={handleSearchSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', alignItems: 'flex-end' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(180px, 100%), 1fr))', gap: '0.75rem', alignItems: 'flex-end' }}>
             {/* Search Input */}
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Search Leads</label>

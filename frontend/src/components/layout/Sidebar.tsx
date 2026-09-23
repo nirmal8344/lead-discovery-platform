@@ -73,7 +73,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           top: 0,
           left: 0,
           zIndex: 100,
-          transform: isMobileOpen ? 'translateX(0)' : undefined,
           transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
         className={`sidebar-nav ${isMobileOpen ? 'open' : ''}`}

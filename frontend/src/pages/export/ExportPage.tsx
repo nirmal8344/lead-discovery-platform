@@ -93,6 +93,7 @@ export const ExportPage: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem', maxWidth: '1080px', margin: '0 auto', paddingBottom: '2rem' }}>
       {/* Header Banner */}
       <div
+        className="hero-banner"
         style={{
           background: 'var(--hero-bg)',
           borderRadius: '16px',
@@ -177,7 +178,7 @@ export const ExportPage: React.FC = () => {
         {/* Format Selector */}
         <div style={{ marginBottom: '1.5rem' }}>
           <label className="form-label" style={{ marginBottom: '0.625rem' }}>File Format</label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', maxWidth: '440px' }}>
+          <div className="format-selector" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', maxWidth: '440px' }}>
             <button
               type="button"
               onClick={() => setExportFormat('csv')}
@@ -225,7 +226,7 @@ export const ExportPage: React.FC = () => {
         </div>
 
         {/* Optional Filter Parameters */}
-        <div className="two-col-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+        <div className="two-col-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">City Filter (Optional)</label>
             <input
@@ -283,7 +284,7 @@ export const ExportPage: React.FC = () => {
               <div style={{ marginTop: '0.5rem', fontSize: '0.8125rem' }}>Loading categories...</div>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.625rem', maxHeight: '220px', overflowY: 'auto', padding: '0.25rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(180px, 100%), 1fr))', gap: '0.625rem', maxHeight: '220px', overflowY: 'auto', padding: '0.25rem' }}>
               {/* All Categories Pill */}
               <button
                 type="button"

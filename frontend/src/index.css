@@ -613,24 +613,57 @@ button, input, select, textarea {
   transition: width 400ms ease-out;
 }
 
-/* Responsive Utilities & Media Queries */
+/* ========================================
+   Responsive Utilities & Media Queries
+   ======================================== */
+
+/* --- Tablet & below (≤1024px): Sidebar hidden, main content full-width --- */
 @media (max-width: 1024px) {
+  /* Sidebar: slide off-screen by default */
+  .sidebar-nav {
+    transform: translateX(-100%);
+  }
+  .sidebar-nav.open {
+    transform: translateX(0);
+  }
+
+  /* Main content: remove sidebar margin */
   .app-main-content {
     margin-left: 0 !important;
     padding: 1.25rem !important;
   }
+
+  /* Show mobile menu hamburger button */
   .mobile-only-btn {
     display: inline-flex !important;
   }
+
+  /* Navbar: allow subtitle to wrap */
+  .navbar-subtitle {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+  }
 }
 
+/* --- Tablet & below (≤768px): Stack grids, shrink hero, adjust forms --- */
 @media (max-width: 768px) {
+  /* Stack two-column grids */
   .two-col-grid {
     grid-template-columns: 1fr !important;
   }
+
+  /* Stack three-column grids */
   .three-col-grid {
     grid-template-columns: 1fr !important;
   }
+
+  /* Stat grid: two columns on tablet */
+  .stat-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Auth pages: single column, hide hero */
   .auth-grid-container {
     grid-template-columns: 1fr !important;
     max-height: none !important;
@@ -643,17 +676,151 @@ button, input, select, textarea {
   .auth-form-column {
     padding: 2rem 1.5rem !important;
   }
-  .stat-grid {
-    grid-template-columns: 1fr 1fr !important;
+
+  /* Hero banners: reduce padding, stack content */
+  .hero-banner {
+    padding: 1.5rem !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+
+  /* Navbar: reduce padding */
+  header {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  /* Navbar: hide subtitle text on small tablets */
+  .navbar-subtitle {
+    display: none !important;
+  }
+
+  /* Navbar: hide "Create Task" text, keep icon */
+  .navbar-create-text {
+    display: none !important;
+  }
+
+  /* Pagination: stack vertically */
+  .pagination-container {
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+    text-align: center !important;
+    padding: 0.75rem 1rem !important;
+  }
+
+  /* Table action buttons: stack and allow wrapping */
+  .table td .action-buttons {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  /* Button groups: allow wrapping */
+  .btn-group {
+    flex-wrap: wrap !important;
+  }
+
+  /* Form action bars: wrap buttons */
+  .form-actions {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .form-actions > * {
+    width: 100% !important;
+  }
+
+  /* Modal: full width with less padding */
+  .modal-content {
+    margin: 0.5rem;
+    max-width: calc(100vw - 1rem) !important;
+    padding: 1.25rem !important;
+    border-radius: var(--radius-lg) !important;
+  }
+
+  /* Error drawer: full width on mobile */
+  .error-drawer {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  /* Table cells: tighter padding */
+  .table th,
+  .table td {
+    padding: 0.625rem 0.75rem;
+  }
+
+  /* Cards: reduce padding */
+  .card {
+    padding: 1rem;
+  }
+
+  /* Main content padding */
+  .app-main-content main {
+    padding: 1rem !important;
+  }
+
+  /* Export format selector: stack */
+  .format-selector {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Settings theme selector: stack */
+  .theme-selector {
+    grid-template-columns: 1fr !important;
   }
 }
 
+/* --- Small mobile (≤480px): Single column everything --- */
 @media (max-width: 480px) {
+  /* Stat grid: single column */
   .stat-grid {
     grid-template-columns: 1fr !important;
   }
+
+  /* Modal: almost full screen */
   .modal-content {
-    padding: 1.25rem;
-    border-radius: var(--radius-lg);
+    padding: 1rem !important;
+    border-radius: var(--radius-md) !important;
+    max-height: 95vh !important;
+  }
+
+  /* Stat cards: tighter padding */
+  .stat-card {
+    padding: 1rem 1.125rem;
+  }
+
+  /* Typography: slightly smaller headings */
+  .text-3xl {
+    font-size: 1.5rem;
+  }
+  .text-2xl {
+    font-size: 1.25rem;
+  }
+
+  /* Hero banners: even tighter */
+  .hero-banner h2 {
+    font-size: 1.25rem !important;
+  }
+
+  /* Pagination buttons: compact */
+  .pagination-container .btn span {
+    display: none;
+  }
+
+  /* Auth form: tighter padding */
+  .auth-form-column {
+    padding: 1.5rem 1rem !important;
+  }
+
+  /* Navbar height: slightly shorter */
+  header {
+    height: 56px !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  /* Filter grid: single column */
+  .filter-grid {
+    grid-template-columns: 1fr !important;
   }
 }
+
