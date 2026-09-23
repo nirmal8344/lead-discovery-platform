@@ -1,0 +1,15 @@
+# Backend Git Ignore Rules
+target/
+*.class
+*.jar
+*.war
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+.env
+.env.*
+!.env.example
+*.log
