@@ -126,7 +126,8 @@ public final class UrlFilterUtils {
     }
 
     /**
-     * Unescapes redirect wrappers like DuckDuckGo uddg parameter or Google /url?q= parameter.
+     * Unescapes redirect wrappers like DuckDuckGo uddg parameter, Google /url?q= parameter,
+     * Yahoo /RU= parameter, or Bing /ck/ redirect parameter.
      */
     public static String unescapeSearchRedirect(String url) {
         if (url == null) return null;
@@ -144,6 +145,27 @@ public final class UrlFilterUtils {
         if (url.contains("/url?q=")) {
             int start = url.indexOf("/url?q=") + 7;
             int end = url.indexOf("&", start);
+            String encoded = end != -1 ? url.substring(start, end) : url.substring(start);
+            try {
+                return URLDecoder.decode(encoded, StandardCharsets.UTF_8);
+            } catch (Exception ignored) {
+            }
+        }
+
+        if (url.contains("/url?url=")) {
+            int start = url.indexOf("/url?url=") + 9;
+            int end = url.indexOf("&", start);
+            String encoded = end != -1 ? url.substring(start, end) : url.substring(start);
+            try {
+                return URLDecoder.decode(encoded, StandardCharsets.UTF_8);
+            } catch (Exception ignored) {
+            }
+        }
+
+        if (url.contains("/RU=")) {
+            int start = url.indexOf("/RU=") + 4;
+            int end = url.indexOf("/RK=", start);
+            if (end == -1) end = url.indexOf("&", start);
             String encoded = end != -1 ? url.substring(start, end) : url.substring(start);
             try {
                 return URLDecoder.decode(encoded, StandardCharsets.UTF_8);
@@ -283,25 +305,44 @@ public final class UrlFilterUtils {
     }
 
     /**
-     * Clean brand name from title by stripping delimiters, slogans, location tags, and suffixes.
+     * Clean brand name from title by stripping delimiters, slogans, generic tags, and suffixes.
      */
     public static String cleanBrandFromTitle(String rawTitle, String domain) {
+        return cleanBrandFromTitle(rawTitle, domain, null);
+    }
+
+    /**
+     * Clean brand name from title by stripping delimiters, slogans, generic tags, and dynamic location suffixes.
+     */
+    public static String cleanBrandFromTitle(String rawTitle, String domain, String location) {
         if (rawTitle == null || rawTitle.isBlank()) {
             return formatDomainAsBrand(domain);
         }
 
         String cleaned = rawTitle.trim();
 
-        // Strip common suffixes
+        // Strip common generic suffixes
         String[] suffixes = {
                 " - Home", " : Home", " | Home", " - Official Website", " | Official Site", " - Official Site",
                 " - About Us", " | About Us", " : About Us", " - Contact Us", " | Contact Us",
-                " | LinkedIn", " - Facebook", " - Twitter", " | Instagram",
-                " - Salem", " | Salem", " in Salem", " (Salem)"
+                " | LinkedIn", " - Facebook", " - Twitter", " | Instagram", " | YouTube", " - YouTube"
         };
         for (String suffix : suffixes) {
             if (cleaned.toLowerCase(Locale.ROOT).endsWith(suffix.toLowerCase(Locale.ROOT))) {
                 cleaned = cleaned.substring(0, cleaned.length() - suffix.length()).trim();
+            }
+        }
+
+        // Dynamically strip user-entered location suffix if provided
+        if (location != null && !location.isBlank()) {
+            String loc = location.trim();
+            String[] locSuffixes = {
+                    " - " + loc, " | " + loc, " in " + loc, " (" + loc + ")"
+            };
+            for (String ls : locSuffixes) {
+                if (cleaned.toLowerCase(Locale.ROOT).endsWith(ls.toLowerCase(Locale.ROOT))) {
+                    cleaned = cleaned.substring(0, cleaned.length() - ls.length()).trim();
+                }
             }
         }
 

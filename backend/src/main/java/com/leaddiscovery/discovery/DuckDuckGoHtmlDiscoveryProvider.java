@@ -26,7 +26,7 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
     private static final String LITE_ENDPOINT = "https://lite.duckduckgo.com/lite/";
     private static final String USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-    private static final int TIMEOUT_MILLIS = 5000;
+    private static final int TIMEOUT_MILLIS = 3500;
 
     @Override
     public String getProviderName() {
@@ -35,13 +35,22 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
 
     @Override
     public List<DiscoveredBusinessDto> discover(String location, String keyword, int maxResults) {
-        String baseQuery = keyword.trim() + " in " + location.trim();
-        log.info("[DISCOVERY_SEARCH] Starting DuckDuckGo search: baseQuery='{}', maxResults={}", baseQuery, maxResults);
+        String cleanLocation = location != null ? location.trim() : "";
+        String cleanKeyword = keyword != null ? keyword.trim() : "";
+
+        if (cleanLocation.isBlank() || cleanKeyword.isBlank()) {
+            return Collections.emptyList();
+        }
+
+        String baseQuery = cleanKeyword + " in " + cleanLocation;
+        log.info("[DISCOVERY_SEARCH] Starting Web Search discovery: keyword='{}', location='{}', maxResults={}",
+                cleanKeyword, cleanLocation, maxResults);
 
         List<String> queryVariants = List.of(
                 baseQuery,
-                keyword.trim() + " " + location.trim() + " official website",
-                keyword.trim() + " " + location.trim() + " contact"
+                cleanKeyword + " " + cleanLocation + " official website",
+                cleanKeyword + " " + cleanLocation + " contact",
+                cleanLocation + " " + cleanKeyword
         );
 
         List<DiscoveredBusinessDto> allResults = new ArrayList<>();
@@ -52,34 +61,56 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
                 break;
             }
 
-            // Strategy 1: POST to html.duckduckgo.com/html/
-            try {
-                List<DiscoveredBusinessDto> results = executePostSearch(HTML_ENDPOINT, query, "https://html.duckduckgo.com/", maxResults - allResults.size());
-                if (results.isEmpty()) {
-                    // Strategy 2: Fallback to POST lite.duckduckgo.com/lite/
-                    results = executePostSearch(LITE_ENDPOINT, query, "https://lite.duckduckgo.com/", maxResults - allResults.size());
-                }
-                if (results.isEmpty()) {
-                    // Strategy 3: Fallback to GET html.duckduckgo.com/html/?q=...
-                    results = executeGetSearch(HTML_ENDPOINT + "?q=" + URLEncoder.encode(query, StandardCharsets.UTF_8), query, maxResults - allResults.size());
-                }
+            // Strategy 1: DuckDuckGo HTML POST
+            List<DiscoveredBusinessDto> results = executePostSearch(HTML_ENDPOINT, query, "https://html.duckduckgo.com/", maxResults - allResults.size());
 
-                for (DiscoveredBusinessDto item : results) {
-                    String domain = UrlFilterUtils.extractDomain(item.getWebsiteUrl());
-                    if (!domain.isBlank() && seenDomains.add(domain)) {
-                        allResults.add(item);
-                        if (allResults.size() >= maxResults) {
-                            break;
-                        }
+            // Strategy 2: DuckDuckGo Lite POST
+            if (results.isEmpty()) {
+                results = executePostSearch(LITE_ENDPOINT, query, "https://lite.duckduckgo.com/", maxResults - allResults.size());
+            }
+
+            // Strategy 3: DuckDuckGo GET
+            if (results.isEmpty()) {
+                results = executeGetSearch(HTML_ENDPOINT + "?q=" + URLEncoder.encode(query, StandardCharsets.UTF_8), query, maxResults - allResults.size());
+            }
+
+            // Strategy 4: Bing Search GET Fallback
+            if (results.isEmpty()) {
+                String bingUrl = "https://www.bing.com/search?q=" + URLEncoder.encode(query, StandardCharsets.UTF_8) + "&count=20";
+                results = executeGetSearch(bingUrl, query, maxResults - allResults.size());
+            }
+
+            // Strategy 5: Google Search GET Fallback
+            if (results.isEmpty()) {
+                String googleUrl = "https://www.google.com/search?q=" + URLEncoder.encode(query, StandardCharsets.UTF_8) + "&hl=en&num=20";
+                results = executeGetSearch(googleUrl, query, maxResults - allResults.size());
+            }
+
+            // Strategy 6: Yahoo Search GET Fallback
+            if (results.isEmpty()) {
+                String yahooUrl = "https://search.yahoo.com/search?p=" + URLEncoder.encode(query, StandardCharsets.UTF_8) + "&n=20";
+                results = executeGetSearch(yahooUrl, query, maxResults - allResults.size());
+            }
+
+            // Strategy 7: Mojeek Search GET Fallback
+            if (results.isEmpty()) {
+                String mojeekUrl = "https://www.mojeek.com/search?q=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
+                results = executeGetSearch(mojeekUrl, query, maxResults - allResults.size());
+            }
+
+            for (DiscoveredBusinessDto item : results) {
+                String domain = UrlFilterUtils.extractDomain(item.getWebsiteUrl());
+                if (!domain.isBlank() && seenDomains.add(domain)) {
+                    allResults.add(item);
+                    if (allResults.size() >= maxResults) {
+                        break;
                     }
                 }
-            } catch (Exception e) {
-                log.warn("[DIAGNOSTIC] DuckDuckGo overall request failed or timed out for query '{}': {}. Skipping further DDG variants.", query, e.getMessage());
-                break;
             }
         }
 
-        log.info("[DISCOVERY_ACCEPTED] DuckDuckGo provider returned {} unique candidate websites", allResults.size());
+        log.info("[DISCOVERY_ACCEPTED] Web Search provider returned {} unique candidate websites for '{} in {}'",
+                allResults.size(), cleanKeyword, cleanLocation);
         return allResults;
     }
 
@@ -108,7 +139,7 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
             boolean challengeDetected = isChallengeOrBlocked(responseBody);
 
             if (challengeDetected) {
-                log.warn("[DIAGNOSTIC] DuckDuckGo POST -> URL: {}, Status: {}, Content-Type: {}, IsChallenge/Blocked: true, BodySnippet: '{}'",
+                log.warn("[DIAGNOSTIC] Web Search POST -> URL: {}, Status: {}, Content-Type: {}, IsChallenge/Blocked: true, BodySnippet: '{}'",
                         endpoint, statusCode, contentType != null ? contentType : "unknown", extractBodySnippet(responseBody));
                 return Collections.emptyList();
             }
@@ -116,15 +147,12 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
             Document doc = response.parse();
             List<DiscoveredBusinessDto> results = parseHtmlResults(doc, endpoint, maxResults);
 
-            log.info("[DIAGNOSTIC] DuckDuckGo POST -> URL: {}, Status: {}, Content-Type: {}, IsChallenge/Blocked: false, ParsedResults: {}",
+            log.info("[DIAGNOSTIC] Web Search POST -> URL: {}, Status: {}, Content-Type: {}, IsChallenge/Blocked: false, ParsedResults: {}",
                     endpoint, statusCode, contentType != null ? contentType : "unknown", results.size());
 
             return results;
-        } catch (java.net.SocketTimeoutException e) {
-            log.warn("[DIAGNOSTIC] DuckDuckGo POST request timed out -> URL: {}, Query: '{}'", endpoint, query);
-            throw new RuntimeException("DuckDuckGo timeout", e);
         } catch (Exception e) {
-            log.warn("[DIAGNOSTIC] DuckDuckGo POST request failed -> URL: {}, Query: '{}', Error: {}", endpoint, query, e.getMessage());
+            log.debug("[DIAGNOSTIC] Web Search POST request skipped -> URL: {}, Query: '{}', Error: {}", endpoint, query, e.getMessage());
             return Collections.emptyList();
         }
     }
@@ -135,7 +163,7 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
                     .userAgent(USER_AGENT)
                     .timeout(TIMEOUT_MILLIS)
                     .followRedirects(true)
-                    .referrer("https://duckduckgo.com/")
+                    .referrer("https://www.google.com/")
                     .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
                     .header("Accept-Language", "en-US,en;q=0.9")
                     .header("Sec-Fetch-Dest", "document")
@@ -151,7 +179,7 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
             boolean challengeDetected = isChallengeOrBlocked(responseBody);
 
             if (challengeDetected) {
-                log.warn("[DIAGNOSTIC] DuckDuckGo GET -> URL: {}, Status: {}, Content-Type: {}, IsChallenge/Blocked: true, BodySnippet: '{}'",
+                log.warn("[DIAGNOSTIC] Web Search GET -> URL: {}, Status: {}, Content-Type: {}, IsChallenge/Blocked: true, BodySnippet: '{}'",
                         searchUrl, statusCode, contentType != null ? contentType : "unknown", extractBodySnippet(responseBody));
                 return Collections.emptyList();
             }
@@ -159,15 +187,12 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
             Document doc = response.parse();
             List<DiscoveredBusinessDto> results = parseHtmlResults(doc, searchUrl, maxResults);
 
-            log.info("[DIAGNOSTIC] DuckDuckGo GET -> URL: {}, Status: {}, Content-Type: {}, IsChallenge/Blocked: false, ParsedResults: {}",
+            log.info("[DIAGNOSTIC] Web Search GET -> URL: {}, Status: {}, Content-Type: {}, IsChallenge/Blocked: false, ParsedResults: {}",
                     searchUrl, statusCode, contentType != null ? contentType : "unknown", results.size());
 
             return results;
-        } catch (java.net.SocketTimeoutException e) {
-            log.warn("[DIAGNOSTIC] DuckDuckGo GET search timed out -> URL: {}, Query: '{}'", searchUrl, query);
-            throw new RuntimeException("DuckDuckGo timeout", e);
         } catch (Exception e) {
-            log.warn("[DIAGNOSTIC] DuckDuckGo GET search failed -> URL: {}, Query: '{}', Error: {}", searchUrl, query, e.getMessage());
+            log.debug("[DIAGNOSTIC] Web Search GET search skipped -> URL: {}, Query: '{}', Error: {}", searchUrl, query, e.getMessage());
             return Collections.emptyList();
         }
     }
@@ -185,7 +210,8 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
                 lower.contains("are you human") ||
                 lower.contains("unusual traffic") ||
                 lower.contains("g-recaptcha") ||
-                lower.contains("cf-challenge");
+                lower.contains("cf-challenge") ||
+                lower.contains("sorry, we just need to make sure you're not a robot");
     }
 
     private String extractBodySnippet(String body) {
@@ -198,17 +224,37 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
         List<DiscoveredBusinessDto> results = new ArrayList<>();
         Set<String> seenDomains = new HashSet<>();
 
-        // Standard DDG HTML selectors
+        // 1. Specific DDG HTML selectors
         Elements resultElements = doc.select(".results .result, .web-result, .result__body");
 
-        // DDG Lite layout selectors: table rows containing a.result-link
+        // 2. DDG Lite layout selectors
         if (resultElements.isEmpty()) {
             resultElements = doc.select("a.result-link, a.result__a, tr:has(a.result-link)");
         }
 
-        // Generic fallback if empty
+        // 3. Bing selectors
         if (resultElements.isEmpty()) {
-            resultElements = doc.select("a[href*='uddg='], a.result__url");
+            resultElements = doc.select("li.b_algo, #b_results .b_algo");
+        }
+
+        // 4. Google selectors
+        if (resultElements.isEmpty()) {
+            resultElements = doc.select("div.g, div.yuRUbf, div.MjjYud");
+        }
+
+        // 5. Yahoo selectors
+        if (resultElements.isEmpty()) {
+            resultElements = doc.select("div.compTitle, div.dd, div.searchCenterMiddle li");
+        }
+
+        // 6. Mojeek selectors
+        if (resultElements.isEmpty()) {
+            resultElements = doc.select("a.title, a.ob, ul.results-standard li");
+        }
+
+        // 7. Generic fallback: all anchor tags in document
+        if (resultElements.isEmpty()) {
+            resultElements = doc.select("a[href*='uddg='], a[href^='/url?q='], a[href^='http']");
         }
 
         for (Element el : resultElements) {
@@ -216,7 +262,7 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
                 break;
             }
 
-            Element linkAnchor = el.is("a") ? el : el.selectFirst("a.result-link, a.result__a, a.result__url, a[href*='uddg='], a[href]");
+            Element linkAnchor = el.is("a") ? el : el.selectFirst("a.result-link, a.result__a, a.result__url, a[href*='uddg='], a[href^='/url?q='], h2 a, h3 a, a[href]");
             if (linkAnchor == null) {
                 continue;
             }
@@ -233,16 +279,16 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
                 continue;
             }
 
-            // Extract raw search candidate title text
+            // Extract candidate title text
             String rawTitle = linkAnchor.text();
             if (rawTitle.isBlank() && el != linkAnchor) {
-                Element titleEl = el.selectFirst(".result__title, .result-link, h2, h3");
+                Element titleEl = el.selectFirst(".result__title, .result-link, h2, h3, .title");
                 if (titleEl != null) {
                     rawTitle = titleEl.text();
                 }
             }
 
-            // Reject search-result articles, listicles, blog posts, or directory listings early
+            // Reject listicles, blog roundups, or directory listings
             if (UrlFilterUtils.isListicleOrDirectory(rawTitle, normalizedUrl)) {
                 log.debug("Skipping listicle/directory candidate: '{}' ({})", rawTitle, normalizedUrl);
                 continue;
@@ -259,12 +305,12 @@ public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvide
                     normalizedUrl,
                     sourceSearchUrl,
                     PROVIDER_NAME,
-                    0.50,
+                    0.65,
                     "CANDIDATE"
             ));
         }
 
-        log.debug("Parsed {} candidate websites from DuckDuckGo response", results.size());
+        log.debug("Parsed {} candidate websites from Web Search response", results.size());
         return results;
     }
 
