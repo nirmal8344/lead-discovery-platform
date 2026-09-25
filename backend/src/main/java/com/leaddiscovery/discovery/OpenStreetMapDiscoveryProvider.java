@@ -77,9 +77,11 @@ public class OpenStreetMapDiscoveryProvider implements BusinessDiscoveryProvider
         Set<String> seenNames = new HashSet<>();
         Set<String> seenDomains = new HashSet<>();
 
+        int radiusMeters = DEFAULT_RADIUS_METERS;
+
         // Strategy 1: Overpass API if geocoded coordinates are available
         if (centerCoords != null) {
-            int radiusMeters = (searchRadiusKm != null && searchRadiusKm > 0)
+            radiusMeters = (searchRadiusKm != null && searchRadiusKm > 0)
                     ? (searchRadiusKm * 1000)
                     : DEFAULT_RADIUS_METERS;
 
@@ -95,6 +97,7 @@ public class OpenStreetMapDiscoveryProvider implements BusinessDiscoveryProvider
                     results.add(dto);
                 }
             }
+            log.info("[DISCOVERY_S1] Strategy 1 (tag-based Overpass) found {} candidates", results.size());
         }
 
         // Strategy 2: Fallback / Enrichment with Nominatim Direct Search if results < maxResults
@@ -108,6 +111,31 @@ public class OpenStreetMapDiscoveryProvider implements BusinessDiscoveryProvider
                     if (!domain.isBlank()) seenDomains.add(domain);
                     results.add(dto);
                 }
+            }
+            log.info("[DISCOVERY_S2] After Strategy 2 (Nominatim), total {} candidates", results.size());
+        }
+
+        // Strategy 3: Broad sweep - query ALL named entities in the area if still < maxResults
+        if (results.size() < maxResults && centerCoords != null) {
+            try {
+                String broadQuery = buildBroadOverpassQuery(centerCoords[0], centerCoords[1], radiusMeters, Math.max(maxResults * 3, 60));
+                List<DiscoveredBusinessDto> broadResults = executeOverpassQuery(broadQuery, centerCoords, cleanLocation, searchRadiusKm, maxResults * 3);
+                for (DiscoveredBusinessDto dto : broadResults) {
+                    if (results.size() >= maxResults) break;
+                    String nameKey = dto.getBusinessName().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+                    String domain = UrlFilterUtils.extractDomain(dto.getWebsiteUrl());
+                    if (seenNames.contains(nameKey)) continue;
+                    if (!domain.isBlank() && seenDomains.contains(domain)) continue;
+                    // Client-side keyword relevance check
+                    if (isKeywordRelevant(dto.getBusinessName(), cleanKeyword)) {
+                        seenNames.add(nameKey);
+                        if (!domain.isBlank()) seenDomains.add(domain);
+                        results.add(dto);
+                    }
+                }
+                log.info("[DISCOVERY_S3] After Strategy 3 (broad sweep), total {} candidates", results.size());
+            } catch (Exception e) {
+                log.debug("[DISCOVERY_S3] Broad sweep failed: {}", e.getMessage());
             }
         }
 
@@ -260,54 +288,162 @@ public class OpenStreetMapDiscoveryProvider implements BusinessDiscoveryProvider
         if (safeKeyword.isBlank()) safeKeyword = keyword;
 
         List<String> clauses = new ArrayList<>();
+        boolean hasSpecificTags = false;
 
+        // Known category tag hints for better precision
         if (lower.contains("school") || lower.contains("college") || lower.contains("universit") || lower.contains("education") || lower.contains("academy")) {
             clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"amenity\"~\"school|college|university|kindergarten\"];", radiusMeters, lat, lon));
             clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"amenity\"~\"school|college|university|kindergarten\"];", radiusMeters, lat, lon));
-        } else if (lower.contains("hospital") || lower.contains("clinic") || lower.contains("doctor") || lower.contains("health") || lower.contains("medical") || lower.contains("pharmacy")) {
+            hasSpecificTags = true;
+        }
+        if (lower.contains("hospital") || lower.contains("clinic") || lower.contains("doctor") || lower.contains("health") || lower.contains("medical") || lower.contains("pharmacy")) {
             clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"amenity\"~\"hospital|clinic|doctors|pharmacy\"];", radiusMeters, lat, lon));
             clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"amenity\"~\"hospital|clinic|doctors|pharmacy\"];", radiusMeters, lat, lon));
-        } else if (lower.contains("hotel") || lower.contains("resort") || lower.contains("lodge") || lower.contains("motel") || lower.contains("hostel") || lower.contains("stay")) {
+            hasSpecificTags = true;
+        }
+        if (lower.contains("hotel") || lower.contains("resort") || lower.contains("lodge") || lower.contains("motel") || lower.contains("hostel") || lower.contains("stay")) {
             clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"tourism\"~\"hotel|motel|guest_house|resort|hostel\"];", radiusMeters, lat, lon));
             clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"tourism\"~\"hotel|motel|guest_house|resort|hostel\"];", radiusMeters, lat, lon));
-        } else if (lower.contains("software") || lower.contains("it") || lower.contains("tech") || lower.contains("comput") || lower.contains("consulting") || lower.contains("develop")) {
+            hasSpecificTags = true;
+        }
+        if (lower.contains("software") || lower.contains("tech") || lower.contains("comput") || lower.contains("consulting") || lower.contains("develop")) {
             clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"office\"~\"it|company|software|telecommunication|consulting\"];", radiusMeters, lat, lon));
             clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"office\"~\"it|company|software|telecommunication|consulting\"];", radiusMeters, lat, lon));
-            clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"office\"];", radiusMeters, lat, lon));
-            clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"office\"];", radiusMeters, lat, lon));
-        } else if (lower.contains("restaurant") || lower.contains("cafe") || lower.contains("food") || lower.contains("bakery") || lower.contains("dining")) {
+            hasSpecificTags = true;
+        }
+        if (lower.contains("restaurant") || lower.contains("cafe") || lower.contains("food") || lower.contains("bakery") || lower.contains("dining")) {
             clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"amenity\"~\"restaurant|cafe|fast_food|bar|pub|bakery\"];", radiusMeters, lat, lon));
             clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"amenity\"~\"restaurant|cafe|fast_food|bar|pub|bakery\"];", radiusMeters, lat, lon));
-        } else if (lower.contains("gym") || lower.contains("fitness") || lower.contains("sport")) {
+            hasSpecificTags = true;
+        }
+        if (lower.contains("gym") || lower.contains("fitness") || lower.contains("sport")) {
             clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"leisure\"~\"fitness_centre|sports_centre\"];", radiusMeters, lat, lon));
             clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"leisure\"~\"fitness_centre|sports_centre\"];", radiusMeters, lat, lon));
-        } else if (lower.contains("bank") || lower.contains("atm") || lower.contains("finance")) {
+            hasSpecificTags = true;
+        }
+        if (lower.contains("bank") || lower.contains("atm") || lower.contains("finance")) {
             clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"amenity\"~\"bank|atm\"];", radiusMeters, lat, lon));
             clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"amenity\"~\"bank|atm\"];", radiusMeters, lat, lon));
-        } else if (lower.contains("shop") || lower.contains("store") || lower.contains("market") || lower.contains("retail") || lower.contains("mall")) {
+            hasSpecificTags = true;
+        }
+        if (lower.contains("shop") || lower.contains("store") || lower.contains("market") || lower.contains("retail") || lower.contains("mall")) {
             clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"shop\"];", radiusMeters, lat, lon));
             clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"shop\"];", radiusMeters, lat, lon));
+            hasSpecificTags = true;
+        }
+        if (lower.contains("textile") || lower.contains("fabric") || lower.contains("cloth") || lower.contains("garment") || lower.contains("weav")) {
+            clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"shop\"~\"clothes|fabric|textiles\"];", radiusMeters, lat, lon));
+            clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"shop\"~\"clothes|fabric|textiles\"];", radiusMeters, lat, lon));
+            clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"craft\"~\"textile|tailor|dressmaker\"];", radiusMeters, lat, lon));
+            clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"craft\"~\"textile|tailor|dressmaker\"];", radiusMeters, lat, lon));
+            clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"industrial\"~\"textile\"];", radiusMeters, lat, lon));
+            clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"industrial\"~\"textile\"];", radiusMeters, lat, lon));
+            hasSpecificTags = true;
+        }
+        if (lower.contains("factory") || lower.contains("manufactur") || lower.contains("industr") || lower.contains("plant") || lower.contains("mill")) {
+            clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"industrial\"];", radiusMeters, lat, lon));
+            clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"industrial\"];", radiusMeters, lat, lon));
+            clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"man_made\"~\"works\"];", radiusMeters, lat, lon));
+            clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"man_made\"~\"works\"];", radiusMeters, lat, lon));
+            hasSpecificTags = true;
+        }
+        if (lower.contains("temple") || lower.contains("church") || lower.contains("mosque") || lower.contains("worship") || lower.contains("relig")) {
+            clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"amenity\"=\"place_of_worship\"];", radiusMeters, lat, lon));
+            clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"amenity\"=\"place_of_worship\"];", radiusMeters, lat, lon));
+            hasSpecificTags = true;
+        }
+        if (lower.contains("petrol") || lower.contains("fuel") || lower.contains("gas station") || lower.contains("filling")) {
+            clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"amenity\"=\"fuel\"];", radiusMeters, lat, lon));
+            clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"amenity\"=\"fuel\"];", radiusMeters, lat, lon));
+            hasSpecificTags = true;
+        }
+        if (lower.contains("supermarket") || lower.contains("grocer") || lower.contains("provision")) {
+            clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"shop\"~\"supermarket|grocery|convenience\"];", radiusMeters, lat, lon));
+            clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"shop\"~\"supermarket|grocery|convenience\"];", radiusMeters, lat, lon));
+            hasSpecificTags = true;
         }
 
+        // GENERIC FALLBACK: Always add broad tag-based clauses for unknown/any keywords
+        // This ensures that even for unrecognized keywords, we query all major OSM entity types
+        if (!hasSpecificTags) {
+            // Query all entities with common business-related tags in the area
+            for (String tag : new String[]{"amenity", "shop", "office", "tourism", "leisure", "craft", "industrial", "healthcare"}) {
+                clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"%s\"][\"name\"];", radiusMeters, lat, lon, tag));
+                clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"%s\"][\"name\"];", radiusMeters, lat, lon, tag));
+            }
+            // Also query building=commercial and landuse=industrial/commercial
+            clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"building\"=\"commercial\"][\"name\"];", radiusMeters, lat, lon));
+            clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"building\"=\"commercial\"][\"name\"];", radiusMeters, lat, lon));
+        }
+
+        // Always include name-regex matching for the full keyword and individual tokens
         clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"name\"~\"%s\",i];", radiusMeters, lat, lon, safeKeyword));
         clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"name\"~\"%s\",i];", radiusMeters, lat, lon, safeKeyword));
 
         String[] words = safeKeyword.split("\\s+");
         for (String w : words) {
             String cleanW = w.replaceAll("[^a-zA-Z0-9]", "").trim();
-            if (cleanW.length() >= 4 && !cleanW.equalsIgnoreCase(safeKeyword)) {
+            if (cleanW.length() >= 3 && !cleanW.equalsIgnoreCase(safeKeyword)) {
                 clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"name\"~\"%s\",i];", radiusMeters, lat, lon, cleanW));
                 clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"name\"~\"%s\",i];", radiusMeters, lat, lon, cleanW));
             }
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append("[out:json][timeout:8];\n(\n");
+        sb.append("[out:json][timeout:10];\n(\n");
         for (String clause : clauses) {
             sb.append("  ").append(clause).append("\n");
         }
         sb.append(");\nout center tags ").append(limit).append(";");
         return sb.toString();
+    }
+
+    /**
+     * Build a broad Overpass query that finds ALL named entities in the area.
+     * Used as Strategy 3 — results are filtered client-side by keyword relevance.
+     */
+    private String buildBroadOverpassQuery(double lat, double lon, int radiusMeters, int limit) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[out:json][timeout:10];\n(\n");
+        for (String tag : new String[]{"amenity", "shop", "office", "tourism", "leisure", "craft", "industrial", "healthcare"}) {
+            sb.append(String.format(Locale.ROOT, "  node(around:%d,%.6f,%.6f)[\"%s\"][\"name\"];\n", radiusMeters, lat, lon, tag));
+            sb.append(String.format(Locale.ROOT, "  way(around:%d,%.6f,%.6f)[\"%s\"][\"name\"];\n", radiusMeters, lat, lon, tag));
+        }
+        sb.append(String.format(Locale.ROOT, "  node(around:%d,%.6f,%.6f)[\"building\"=\"commercial\"][\"name\"];\n", radiusMeters, lat, lon));
+        sb.append(String.format(Locale.ROOT, "  way(around:%d,%.6f,%.6f)[\"building\"=\"commercial\"][\"name\"];\n", radiusMeters, lat, lon));
+        sb.append(");\nout center tags ").append(limit).append(";");
+        return sb.toString();
+    }
+
+    /**
+     * Client-side keyword relevance check. Returns true if the business name or
+     * its tokens are loosely related to the keyword. Very permissive — we prefer
+     * false positives over missed results since website extraction happens later.
+     */
+    private boolean isKeywordRelevant(String businessName, String keyword) {
+        if (businessName == null || keyword == null) return false;
+        String nameLower = businessName.toLowerCase(Locale.ROOT);
+        String kwLower = keyword.toLowerCase(Locale.ROOT);
+
+        // Direct substring match
+        if (nameLower.contains(kwLower) || kwLower.contains(nameLower)) return true;
+
+        // Token-level match: any keyword token appears in business name or vice versa
+        String[] kwTokens = kwLower.split("\\s+");
+        String[] nameTokens = nameLower.split("\\s+");
+
+        for (String kt : kwTokens) {
+            if (kt.length() < 3) continue;
+            if (nameLower.contains(kt)) return true;
+        }
+        for (String nt : nameTokens) {
+            if (nt.length() < 3) continue;
+            if (kwLower.contains(nt)) return true;
+        }
+
+        // For broad sweeps with unknown keywords, be permissive:
+        // Accept all named entities found in the area (they are already geographically relevant)
+        return true;
     }
 
     private List<DiscoveredBusinessDto> executeOverpassQuery(String overpassQuery, double[] centerCoords,
