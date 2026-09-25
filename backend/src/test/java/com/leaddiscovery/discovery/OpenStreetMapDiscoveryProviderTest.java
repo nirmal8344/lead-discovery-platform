@@ -22,7 +22,7 @@ class OpenStreetMapDiscoveryProviderTest {
     @Test
     @DisplayName("Should return provider name correctly")
     void testGetProviderName() {
-        assertEquals("OpenStreetMap-Nominatim", provider.getProviderName());
+        assertEquals("OpenStreetMap-Overpass", provider.getProviderName());
         assertTrue(provider.isEnabled());
     }
 
@@ -47,7 +47,7 @@ class OpenStreetMapDiscoveryProviderTest {
             assertFalse(dto.getBusinessName().isBlank());
             assertNotNull(dto.getWebsiteUrl());
             assertTrue(dto.getWebsiteUrl().startsWith("http"));
-            assertEquals("OpenStreetMap-Nominatim", dto.getDiscoverySource());
+            assertEquals("OpenStreetMap-Overpass", dto.getDiscoverySource());
         }
     }
 

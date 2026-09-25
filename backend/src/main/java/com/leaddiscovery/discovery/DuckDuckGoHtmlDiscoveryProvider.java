@@ -8,6 +8,7 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.net.URLEncoder;
@@ -15,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @Component
+@Order(2)
 public class DuckDuckGoHtmlDiscoveryProvider implements BusinessDiscoveryProvider {
 
     private static final Logger log = LoggerFactory.getLogger(DuckDuckGoHtmlDiscoveryProvider.class);

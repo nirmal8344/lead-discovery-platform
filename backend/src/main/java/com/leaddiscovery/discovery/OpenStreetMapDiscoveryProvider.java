@@ -6,6 +6,7 @@ import com.leaddiscovery.dto.DiscoveredBusinessDto;
 import com.leaddiscovery.util.GeoUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.io.InputStream;
@@ -17,11 +18,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @Component
+@Order(1)
 public class OpenStreetMapDiscoveryProvider implements BusinessDiscoveryProvider {
 
     private static final Logger log = LoggerFactory.getLogger(OpenStreetMapDiscoveryProvider.class);
 
-    private static final String PROVIDER_NAME = "OpenStreetMap-Nominatim";
+    private static final String PROVIDER_NAME = "OpenStreetMap-Overpass";
     private static final String NOMINATIM_BASE_URL = "https://nominatim.openstreetmap.org/search";
     private static final String USER_AGENT = "BusinessDiscoveryPlatform/1.0 (support@leaddiscovery.com)";
     private static final String REFERER = "https://leaddiscovery.com";
@@ -289,6 +291,15 @@ public class OpenStreetMapDiscoveryProvider implements BusinessDiscoveryProvider
 
         clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"name\"~\"%s\",i];", radiusMeters, lat, lon, safeKeyword));
         clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"name\"~\"%s\",i];", radiusMeters, lat, lon, safeKeyword));
+
+        String[] words = safeKeyword.split("\\s+");
+        for (String w : words) {
+            String cleanW = w.replaceAll("[^a-zA-Z0-9]", "").trim();
+            if (cleanW.length() >= 4 && !cleanW.equalsIgnoreCase(safeKeyword)) {
+                clauses.add(String.format(Locale.ROOT, "node(around:%d,%.6f,%.6f)[\"name\"~\"%s\",i];", radiusMeters, lat, lon, cleanW));
+                clauses.add(String.format(Locale.ROOT, "way(around:%d,%.6f,%.6f)[\"name\"~\"%s\",i];", radiusMeters, lat, lon, cleanW));
+            }
+        }
 
         StringBuilder sb = new StringBuilder();
         sb.append("[out:json][timeout:8];\n(\n");
